@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>お小遣い記録アプリ（試作）</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        
+        /* 表を囲む外枠 */
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border: 1px solid #ccc;
+            margin-bottom: 20px;
+        }
+
+        table { 
+            border-collapse: collapse; 
+            min-width: 1500px; 
+        }
+        
+        th, td { border: 1px solid #ccc; padding: 10px; text-align: center; background-color: white; }
+        .count-btn { width: 50px; height: 40px; font-size: 16px; cursor: pointer; }
+
+        /* 入力エリア */
+        .input-area { margin-bottom: 15px; }
+        .input-area input { padding: 5px; font-size: 14px; margin-right: 5px; }
+        .add-btn { padding: 6px 12px; font-size: 14px; cursor: pointer; }
+        .save-btn { padding: 10px 20px; font-size: 16px; background-color: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 4px; margin-top: 10px; }
+
+        /* クラス名での列固定 */
+        .fix-col-name { position: sticky; left: 0; z-index: 3; background-color: #f9f9f9; min-width: 80px; }
+        .fix-col-price { position: sticky; left: 102px; z-index: 3; background-color: #f9f9f9; min-width: 50px; }
+        .fix-col-total { position: sticky; right: 0; z-index: 3; background-color: #f9f9f9; border-left: 2px solid #ccc; min-width: 60px; }
+        thead tr { position: relative; z-index: 2; }
+    </style>
+</head>
+<body>
+
+    <h2>お小遣い記録（<span id="currentMonthTitle"></span>月度）</h2>
+
+    <div class="input-area">
+        <input type="text" id="newItemName" placeholder="例：お片付け" style="width: 120px;">
+        <input type="number" id="newItemPrice" placeholder="例：5" style="width: 60px;">円
+        <button class="add-btn" onclick="addNewRow()">追加</button>
+    </div>
+
+    <div class="table-container">
+        <table id="targetTable">
+            <thead>
+                <tr id="headerRow">
+                    <th class="fix-col-name">項目</th>
+                    <th class="fix-col-price">一回</th>
+                    <th class="fix-col-total">合計</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                </tbody>
+        </table>
+    </div>
+
+    <h3>現在のお小遣い: <span id="currentWallet">0</span>円</h3>
+
+    <button class="save-btn" onclick="saveToCSV()">表の状態を保存する（CSV）</button>
+
+    <script>
+        let currentMonth = 0;
+        let daysInMonth = 0;
+
+        // アプリ起動時の初期化処理
+        window.onload = function() {
+            const today = new Date();
+            currentMonth = today.getMonth() + 1;
+            daysInMonth = new Date(today.getFullYear(), currentMonth, 0).getDate(); 
+
+            document.getElementById('currentMonthTitle').innerText = currentMonth;
+
+            const headerRow = document.getElementById('headerRow');
+            const totalHeader = headerRow.querySelector('.fix-col-total');
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const th = document.createElement('th');
+                th.innerText = `${currentMonth}/${d}`;
+                headerRow.insertBefore(th, totalHeader);
+            }
+
+            // ★起動時に、保存されているデータを読み込んで復元する
+            loadData();
+        };
+
+        // ボタンが押されたときに動く処理
+        function countUp(button) {
+            let currentCount = parseInt(button.innerText);
+            currentCount++;
+            button.innerText = currentCount;
+            
+            // 行の計算処理
+            updateRowTotal(button.closest('tr'));
+            
+            // ★数字が変わったのでデータを保存する
+            saveData();
+        }
+
+        // 特定の行の合計を計算する関数
+        function updateRowTotal(row) {
+            const priceText = row.querySelector('.fix-col-price').innerText;
+            const price = parseInt(priceText.replace('円', ''));
+            
+            let totalCountInRow = 0;
+            const buttons = row.querySelectorAll('.count-btn');
+            buttons.forEach(btn => {
+                totalCountInRow += parseInt(btn.innerText);
+            });
+            
+            const rowTotal = price * totalCountInRow;
+            row.querySelector('.row-total').innerText = rowTotal;
+            
+            calculateTotalWallet();
+        }
+
+        // 全体の合計金額を計算する関数
+        function calculateTotalWallet() {
+            let totalWallet = 0;
+            const rowTotals = document.querySelectorAll('.row-total');
+            rowTotals.forEach(span => {
+                totalWallet += parseInt(span.innerText);
+            });
+            document.getElementById('currentWallet').innerText = totalWallet;
+        }
+
+        // 新しい行を追加する関数
+        function addNewRow() {
+            const nameInput = document.getElementById('newItemName');
+            const priceInput = document.getElementById('newItemPrice');
+            const name = nameInput.value;
+            const price = priceInput.value;
+
+            if (name === "" || price === "") {
+                alert("項目名と金額を入力してください！");
+                return;
+            }
+
+            // 行を作成して追加（中身を組み立てる処理を別関数に分けました）
+            createRowElement(name, price, []);
+
+            nameInput.value = "";
+            priceInput.value = "";
+            
+            // ★行が増えたのでデータを保存する
+            saveData();
+        }
+
+        // ★行のHTMLを組み立てて画面に追加する共通関数（復元時にも使い回します）
+        function createRowElement(name, price, savedCounts) {
+            const tbody = document.getElementById('tableBody');
+            const newRow = document.createElement('tr');
+
+            let rowHTML = `
+                <td class="fix-col-name">${name}</td>
+                <td class="fix-col-price">${price}円</td>
+            `;
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                // 保存されたデータがあればその数字を、なければ0を初期値にする
+                const countVal = savedCounts[d - 1] || 0;
+                rowHTML += `<td><button class="count-btn" onclick="countUp(this)">${countVal}</button></td>`;
+            }
+
+            rowHTML += `<td class="fix-col-total"><span class="row-total">0</span>円</td>`;
+
+            newRow.innerHTML = rowHTML;
+            tbody.appendChild(newRow);
+
+            // 合計値の初期計算
+            updateRowTotal(newRow);
+        }
+
+        // ★データをブラウザ（LocalStorage）に保存する関数
+        function saveData() {
+            const rows = document.querySelectorAll('#tableBody tr');
+            let dataToSave = [];
+
+            rows.forEach(row => {
+                let rowData = {
+                    name: row.querySelector('.fix-col-name').innerText,
+                    price: parseInt(row.querySelector('.fix-col-price').innerText.replace('円', '')),
+                    counts: []
+                };
+
+                const buttons = row.querySelectorAll('.count-btn');
+                buttons.forEach(btn => {
+                    rowData.counts.push(parseInt(btn.innerText));
+                });
+
+                dataToSave.push(rowData);
+            });
+
+            // 文字列に変換して「okozukai_data」という名前で保存
+            localStorage.setItem('okozukai_data', JSON.stringify(dataToSave));
+        }
+
+        // ★データをブラウザ（LocalStorage）から読み込んで復元する関数
+        function loadData() {
+            const savedDataText = localStorage.getItem('okozukai_data');
+            if (!savedDataText) return; // データがなければ何もしない
+
+            const savedData = JSON.parse(savedDataText);
+            savedData.forEach(rowData => {
+                // 保存されていたデータをもとに行を復元
+                createRowElement(rowData.name, rowData.price, rowData.counts);
+            });
+        }
+
+        // 表データをCSVにしてダウンロードする関数
+        function saveToCSV() {
+            const table = document.getElementById('targetTable');
+            let csvContent = [];
+
+            const headerCells = table.querySelectorAll('thead th');
+            let headerRow = [];
+            headerCells.forEach(cell => headerRow.push(cell.innerText));
+            csvContent.push(headerRow.join(','));
+
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                let rowData = [];
+                
+                rowData.push(row.querySelector('.fix-col-name').innerText);
+                rowData.push(row.querySelector('.fix-col-price').innerText.replace('円', ''));
+
+                const buttons = row.querySelectorAll('.count-btn');
+                buttons.forEach(btn => rowData.push(btn.innerText));
+
+                const total = row.querySelector('.row-total').innerText;
+                rowData.push(total);
+
+                csvContent.push(rowData.join(','));
+            });
+
+            const csvString = "\uFEFF" + csvContent.join('\n');
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `okozukai_record_${currentMonth}gatsu.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
