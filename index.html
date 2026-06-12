@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>お小遣い記録アプリ（ボタン保存版）</title>
+    <title>お小遣い記録アプリ（引き算機能付き）</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         
@@ -28,12 +28,24 @@
         .input-area input { padding: 5px; font-size: 14px; margin-right: 5px; }
         .add-btn { padding: 6px 12px; font-size: 14px; cursor: pointer; }
         
-        /* ★ボタンのスタイルを調整 */
+        /* お小遣い集計エリアのスタイル */
+        .wallet-summary {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            max-width: 400px;
+            border: 1px solid #ddd;
+        }
+        .wallet-summary h3 { margin: 8px 0; font-size: 16px; color: #333; }
+        .wallet-summary span { font-weight: bold; font-size: 18px; }
+        .calc-btn { width: 35px; height: 30px; font-size: 16px; font-weight: bold; cursor: pointer; margin-left: 5px; vertical-align: middle; }
+
+        /* ボタンエリア */
         .action-btns { margin-top: 15px; display: flex; gap: 10px; }
         .cloud-save-btn { padding: 12px 24px; font-size: 16px; background-color: #0288D1; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
         .csv-btn { padding: 12px 24px; font-size: 16px; background-color: #757575; color: white; border: none; cursor: pointer; border-radius: 4px; }
         
-        /* 通信中メッセージ */
         .loading-msg { color: #0288D1; font-weight: bold; margin-bottom: 10px; display: none; }
 
         /* クラス名での列固定 */
@@ -69,7 +81,16 @@
         </table>
     </div>
 
-    <h3>現在のお小遣い: <span id="currentWallet">0</span>円</h3>
+    <div class="wallet-summary">
+        <h3>① 稼いだお小遣い: <span id="earnedWallet" style="color: #2E7D32;">0</span> 円</h3>
+        <h3>
+            ② もらったお小遣い: <span id="paidWallet" style="color: #C62828;">0</span> 円
+            <button class="calc-btn" onclick="changePaidWallet(-10)">-</button>
+            <button class="calc-btn" onclick="changePaidWallet(10)">+</button>
+        </h3>
+        <hr style="border: 0; border-top: 1px solid #ccc;">
+        <h3>③ まだもらっていないお小遣い: <span id="remainingWallet" style="color: #E65100; font-size: 22px;">0</span> 円</h3>
+    </div>
 
     <div class="action-btns">
         <button class="cloud-save-btn" onclick="saveToSpreadsheet()">スプレッドシートに保存する</button>
@@ -83,7 +104,6 @@
         let currentMonth = 0;
         let daysInMonth = 0;
 
-        // アプリ起動時の初期化処理
         window.onload = function() {
             const today = new Date();
             currentMonth = today.getMonth() + 1;
@@ -100,21 +120,16 @@
                 headerRow.insertBefore(th, totalHeader);
             }
 
-            // 開いたときにスプレッドシートから自動読み込み
             loadFromSpreadsheet();
         };
 
-        // ボタンが押されたとき（カウントアップ時）の自動通信を「廃止」しました！
         function countUp(button) {
             let currentCount = parseInt(button.innerText);
             currentCount++;
             button.innerText = currentCount;
-            
-            // 画面上の計算だけを即座に行う
             updateRowTotal(button.closest('tr'));
         }
 
-        // 特定の行の合計を計算する関数
         function updateRowTotal(row) {
             const priceText = row.querySelector('.fix-col-price').innerText;
             const price = parseInt(priceText.replace('円', ''));
@@ -131,17 +146,37 @@
             calculateTotalWallet();
         }
 
-        // 全体の合計金額を計算する関数
+        // ★①、②、③のお小遣いを総合計算する関数
         function calculateTotalWallet() {
-            let totalWallet = 0;
+            let earnedWallet = 0;
             const rowTotals = document.querySelectorAll('.row-total');
             rowTotals.forEach(span => {
-                totalWallet += parseInt(span.innerText);
+                earnedWallet += parseInt(span.innerText);
             });
-            document.getElementById('currentWallet').innerText = totalWallet;
+            
+            // ① 稼いだお小遣いを更新
+            document.getElementById('earnedWallet').innerText = earnedWallet;
+            
+            // ② もらったお小遣いを取得
+            const paidWallet = parseInt(document.getElementById('paidWallet').innerText);
+            
+            // ③ まだもらっていないお小遣い（① - ②）を計算して更新
+            const remainingWallet = earnedWallet - paidWallet;
+            document.getElementById('remainingWallet').innerText = remainingWallet;
         }
 
-        // 新しい行を追加する関数（ここでも自動通信はしません）
+        // ★②「もらったお小遣い」をボタンで増減させる関数（今回は1回10円ずつにしてみました）
+        function changePaidWallet(amount) {
+            const paidSpan = document.getElementById('paidWallet');
+            let currentPaid = parseInt(paidSpan.innerText);
+            currentPaid += amount;
+            
+            if (currentPaid < 0) currentPaid = 0; // マイナスにはならないようにガード
+            
+            paidSpan.innerText = currentPaid;
+            calculateTotalWallet(); // 再計算
+        }
+
         function addNewRow() {
             const nameInput = document.getElementById('newItemName');
             const priceInput = document.getElementById('newItemPrice');
@@ -154,12 +189,10 @@
             }
 
             createRowElement(name, price, []);
-
             nameInput.value = "";
             priceInput.value = "";
         }
 
-        // 行のHTMLを組み立てて画面に追加する共通関数
         function createRowElement(name, price, savedCounts) {
             const tbody = document.getElementById('tableBody');
             const newRow = document.createElement('tr');
@@ -182,7 +215,7 @@
             updateRowTotal(newRow);
         }
 
-        // ★【変更】「保存ボタン」を押した時だけデータを送信する
+        // ★スプレッドシートにまとめて保存（もらったお小遣いも一緒に送る）
         function saveToSpreadsheet() {
             if(GAS_URL.includes("ここにコピーした")) {
                 alert("GASのURLを設定してください！");
@@ -193,7 +226,7 @@
             document.getElementById('loadingMessage').style.display = 'block';
             
             const rows = document.querySelectorAll('#tableBody tr');
-            let dataToSave = [];
+            let itemsData = [];
 
             rows.forEach(row => {
                 let rowData = {
@@ -203,26 +236,32 @@
                 };
                 const buttons = row.querySelectorAll('.count-btn');
                 buttons.forEach(btn => rowData.counts.push(parseInt(btn.innerText)));
-                dataToSave.push(rowData);
+                itemsData.push(rowData);
             });
+
+            // 送るデータをひとまとめにする
+            const payload = {
+                items: itemsData,
+                paidWallet: parseInt(document.getElementById('paidWallet').innerText)
+            };
 
             fetch(GAS_URL, {
                 method: "POST",
-                body: JSON.stringify(dataToSave)
+                body: JSON.stringify(payload)
             })
             .then(res => res.json())
             .then(result => {
                 document.getElementById('loadingMessage').style.display = 'none';
-                alert("スプレッドシートに保存しました！"); // 保存完了を伝える
+                alert("スプレッドシートに保存しました！");
             })
             .catch(err => {
                 console.error("保存失敗:", err);
                 document.getElementById('loadingMessage').style.display = 'none';
-                alert("保存に失敗しました。詳細なエラーは開発者コンコルを確認してください。");
+                alert("保存に失敗しました。");
             });
         }
 
-        // スプレッドシートからデータを読み込んで復元する関数
+        // ★スプレッドシートから読み込んで復元
         function loadFromSpreadsheet() {
             if(GAS_URL.includes("ここにコピーした")) return;
 
@@ -233,11 +272,17 @@
             fetch(GAS_URL)
             .then(res => res.json())
             .then(savedData => {
-                if (savedData && savedData.length > 0) {
-                    savedData.forEach(rowData => {
+                // データの項目を復元
+                if (savedData.items && savedData.items.length > 0) {
+                    savedData.items.forEach(rowData => {
                         createRowElement(rowData.name, rowData.price, rowData.counts);
                     });
                 }
+                
+                // ②もらったお小遣いの値を復元
+                document.getElementById('paidWallet').innerText = savedData.paidWallet || 0;
+                
+                calculateTotalWallet(); // 全体を再計算
                 document.getElementById('loadingMessage').style.display = 'none';
             })
             .catch(err => {
@@ -246,7 +291,6 @@
             });
         }
 
-        // 表データをCSVにしてダウンロードする関数
         function saveToCSV() {
             const table = document.getElementById('targetTable');
             let csvContent = [];
