@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>お小遣い記録アプリ（試作）</title>
+    <title>お小遣い記録アプリ（スプレッドシート連動版）</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         
@@ -28,6 +28,9 @@
         .input-area input { padding: 5px; font-size: 14px; margin-right: 5px; }
         .add-btn { padding: 6px 12px; font-size: 14px; cursor: pointer; }
         .save-btn { padding: 10px 20px; font-size: 16px; background-color: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 4px; margin-top: 10px; }
+        
+        /* 通信中メッセージ */
+        .loading-msg { color: #666; font-style: italic; margin-bottom: 10px; display: none; }
 
         /* クラス名での列固定 */
         .fix-col-name { position: sticky; left: 0; z-index: 3; background-color: #f9f9f9; min-width: 80px; }
@@ -45,6 +48,8 @@
         <input type="number" id="newItemPrice" placeholder="例：5" style="width: 60px;">円
         <button class="add-btn" onclick="addNewRow()">追加</button>
     </div>
+
+    <div id="loadingMessage" class="loading-msg">スプレッドシートと通信中...</div>
 
     <div class="table-container">
         <table id="targetTable">
@@ -65,6 +70,9 @@
     <button class="save-btn" onclick="saveToCSV()">表の状態を保存する（CSV）</button>
 
     <script>
+        // ★ここに取得した長いGoogleウェブアプリのURLを貼り付けてください！
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxtRfXMfsOGxgiJr3_ZVtG7-lfkJpWFEty8RfZpN_dmaNErikSSnf80Lw3lMVJ4BtUC/exec";
+
         let currentMonth = 0;
         let daysInMonth = 0;
 
@@ -85,8 +93,8 @@
                 headerRow.insertBefore(th, totalHeader);
             }
 
-            // ★起動時に、保存されているデータを読み込んで復元する
-            loadData();
+            // 起動時にスプレッドシートからデータを読み込む
+            loadFromSpreadsheet();
         };
 
         // ボタンが押されたときに動く処理
@@ -95,11 +103,10 @@
             currentCount++;
             button.innerText = currentCount;
             
-            // 行の計算処理
             updateRowTotal(button.closest('tr'));
             
-            // ★数字が変わったのでデータを保存する
-            saveData();
+            // カウントが変わったらスプレッドシートに自動保存
+            saveToSpreadsheet();
         }
 
         // 特定の行の合計を計算する関数
@@ -141,17 +148,16 @@
                 return;
             }
 
-            // 行を作成して追加（中身を組み立てる処理を別関数に分けました）
             createRowElement(name, price, []);
 
             nameInput.value = "";
             priceInput.value = "";
             
-            // ★行が増えたのでデータを保存する
-            saveData();
+            // 行が増えたのでスプレッドシートに自動保存
+            saveToSpreadsheet();
         }
 
-        // ★行のHTMLを組み立てて画面に追加する共通関数（復元時にも使い回します）
+        // 行のHTMLを組み立てて画面に追加する共通関数
         function createRowElement(name, price, savedCounts) {
             const tbody = document.getElementById('tableBody');
             const newRow = document.createElement('tr');
@@ -162,7 +168,6 @@
             `;
 
             for (let d = 1; d <= daysInMonth; d++) {
-                // 保存されたデータがあればその数字を、なければ0を初期値にする
                 const countVal = savedCounts[d - 1] || 0;
                 rowHTML += `<td><button class="count-btn" onclick="countUp(this)">${countVal}</button></td>`;
             }
@@ -172,12 +177,14 @@
             newRow.innerHTML = rowHTML;
             tbody.appendChild(newRow);
 
-            // 合計値の初期計算
             updateRowTotal(newRow);
         }
 
-        // ★データをブラウザ（LocalStorage）に保存する関数
-        function saveData() {
+        // ★スプレッドシートにデータを送信・保存する関数
+        function saveToSpreadsheet() {
+            if(GAS_URL.includes("ここにコピーした")) return; // 初期URLのままならスキップ
+
+            document.getElementById('loadingMessage').style.display = 'block';
             const rows = document.querySelectorAll('#tableBody tr');
             let dataToSave = [];
 
@@ -187,28 +194,47 @@
                     price: parseInt(row.querySelector('.fix-col-price').innerText.replace('円', '')),
                     counts: []
                 };
-
                 const buttons = row.querySelectorAll('.count-btn');
-                buttons.forEach(btn => {
-                    rowData.counts.push(parseInt(btn.innerText));
-                });
-
+                buttons.forEach(btn => rowData.counts.push(parseInt(btn.innerText)));
                 dataToSave.push(rowData);
             });
 
-            // 文字列に変換して「okozukai_data」という名前で保存
-            localStorage.setItem('okozukai_data', JSON.stringify(dataToSave));
+            // Google Apps ScriptへデータをPOST送信
+            fetch(GAS_URL, {
+                method: "POST",
+                body: JSON.stringify(dataToSave)
+            })
+            .then(res => res.json())
+            .then(result => {
+                document.getElementById('loadingMessage').style.display = 'none';
+            })
+            .catch(err => {
+                console.error("保存失敗:", err);
+                document.getElementById('loadingMessage').style.display = 'none';
+            });
         }
 
-        // ★データをブラウザ（LocalStorage）から読み込んで復元する関数
-        function loadData() {
-            const savedDataText = localStorage.getItem('okozukai_data');
-            if (!savedDataText) return; // データがなければ何もしない
+        // ★スプレッドシートからデータを読み込んで復元する関数
+        function loadFromSpreadsheet() {
+            if(GAS_URL.includes("ここにコピーした")) return;
 
-            const savedData = JSON.parse(savedDataText);
-            savedData.forEach(rowData => {
-                // 保存されていたデータをもとに行を復元
-                createRowElement(rowData.name, rowData.price, rowData.counts);
+            document.getElementById('loadingMessage').style.display = 'block';
+            document.getElementById('tableBody').innerHTML = ""; // いったん空にする
+
+            // Google Apps ScriptからデータをGET取得
+            fetch(GAS_URL)
+            .then(res => res.json())
+            .then(savedData => {
+                if (savedData && savedData.length > 0) {
+                    savedData.forEach(rowData => {
+                        createRowElement(rowData.name, rowData.price, rowData.counts);
+                    });
+                }
+                document.getElementById('loadingMessage').style.display = 'none';
+            })
+            .catch(err => {
+                console.error("読込失敗:", err);
+                document.getElementById('loadingMessage').style.display = 'none';
             });
         }
 
@@ -225,16 +251,12 @@
             const rows = table.querySelectorAll('tbody tr');
             rows.forEach(row => {
                 let rowData = [];
-                
                 rowData.push(row.querySelector('.fix-col-name').innerText);
                 rowData.push(row.querySelector('.fix-col-price').innerText.replace('円', ''));
-
                 const buttons = row.querySelectorAll('.count-btn');
                 buttons.forEach(btn => rowData.push(btn.innerText));
-
                 const total = row.querySelector('.row-total').innerText;
                 rowData.push(total);
-
                 csvContent.push(rowData.join(','));
             });
 
@@ -242,7 +264,6 @@
             const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             const url = URL.createObjectURL(blob);
-            
             link.setAttribute("href", url);
             link.setAttribute("download", `okozukai_record_${currentMonth}gatsu.csv`);
             link.style.visibility = 'hidden';
