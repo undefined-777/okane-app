@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>お小遣い記録アプリ（スプレッドシート連動版）</title>
+    <title>お小遣い記録アプリ（ボタン保存版）</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         
@@ -23,14 +23,18 @@
         th, td { border: 1px solid #ccc; padding: 10px; text-align: center; background-color: white; }
         .count-btn { width: 50px; height: 40px; font-size: 16px; cursor: pointer; }
 
-        /* 入力エリア */
+        /* 入力エリアと操作ボタン */
         .input-area { margin-bottom: 15px; }
         .input-area input { padding: 5px; font-size: 14px; margin-right: 5px; }
         .add-btn { padding: 6px 12px; font-size: 14px; cursor: pointer; }
-        .save-btn { padding: 10px 20px; font-size: 16px; background-color: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 4px; margin-top: 10px; }
+        
+        /* ★ボタンのスタイルを調整 */
+        .action-btns { margin-top: 15px; display: flex; gap: 10px; }
+        .cloud-save-btn { padding: 12px 24px; font-size: 16px; background-color: #0288D1; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        .csv-btn { padding: 12px 24px; font-size: 16px; background-color: #757575; color: white; border: none; cursor: pointer; border-radius: 4px; }
         
         /* 通信中メッセージ */
-        .loading-msg { color: #666; font-style: italic; margin-bottom: 10px; display: none; }
+        .loading-msg { color: #0288D1; font-weight: bold; margin-bottom: 10px; display: none; }
 
         /* クラス名での列固定 */
         .fix-col-name { position: sticky; left: 0; z-index: 3; background-color: #f9f9f9; min-width: 80px; }
@@ -67,11 +71,14 @@
 
     <h3>現在のお小遣い: <span id="currentWallet">0</span>円</h3>
 
-    <button class="save-btn" onclick="saveToCSV()">表の状態を保存する（CSV）</button>
+    <div class="action-btns">
+        <button class="cloud-save-btn" onclick="saveToSpreadsheet()">スプレッドシートに保存する</button>
+        <button class="csv-btn" onclick="saveToCSV()">CSVダウンロード</button>
+    </div>
 
     <script>
         // ★ここに取得した長いGoogleウェブアプリのURLを貼り付けてください！
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbxtRfXMfsOGxgiJr3_ZVtG7-lfkJpWFEty8RfZpN_dmaNErikSSnf80Lw3lMVJ4BtUC/exec";
+        const GAS_URL = "ここにコピーしたウェブアプリのURLを貼り付ける";
 
         let currentMonth = 0;
         let daysInMonth = 0;
@@ -93,20 +100,18 @@
                 headerRow.insertBefore(th, totalHeader);
             }
 
-            // 起動時にスプレッドシートからデータを読み込む
+            // 開いたときにスプレッドシートから自動読み込み
             loadFromSpreadsheet();
         };
 
-        // ボタンが押されたときに動く処理
+        // ボタンが押されたとき（カウントアップ時）の自動通信を「廃止」しました！
         function countUp(button) {
             let currentCount = parseInt(button.innerText);
             currentCount++;
             button.innerText = currentCount;
             
+            // 画面上の計算だけを即座に行う
             updateRowTotal(button.closest('tr'));
-            
-            // カウントが変わったらスプレッドシートに自動保存
-            saveToSpreadsheet();
         }
 
         // 特定の行の合計を計算する関数
@@ -136,7 +141,7 @@
             document.getElementById('currentWallet').innerText = totalWallet;
         }
 
-        // 新しい行を追加する関数
+        // 新しい行を追加する関数（ここでも自動通信はしません）
         function addNewRow() {
             const nameInput = document.getElementById('newItemName');
             const priceInput = document.getElementById('newItemPrice');
@@ -152,9 +157,6 @@
 
             nameInput.value = "";
             priceInput.value = "";
-            
-            // 行が増えたのでスプレッドシートに自動保存
-            saveToSpreadsheet();
         }
 
         // 行のHTMLを組み立てて画面に追加する共通関数
@@ -180,11 +182,16 @@
             updateRowTotal(newRow);
         }
 
-        // ★スプレッドシートにデータを送信・保存する関数
+        // ★【変更】「保存ボタン」を押した時だけデータを送信する
         function saveToSpreadsheet() {
-            if(GAS_URL.includes("ここにコピーした")) return; // 初期URLのままならスキップ
+            if(GAS_URL.includes("ここにコピーした")) {
+                alert("GASのURLを設定してください！");
+                return;
+            }
 
+            document.getElementById('loadingMessage').innerText = "スプレッドシートに保存中...";
             document.getElementById('loadingMessage').style.display = 'block';
+            
             const rows = document.querySelectorAll('#tableBody tr');
             let dataToSave = [];
 
@@ -199,7 +206,6 @@
                 dataToSave.push(rowData);
             });
 
-            // Google Apps ScriptへデータをPOST送信
             fetch(GAS_URL, {
                 method: "POST",
                 body: JSON.stringify(dataToSave)
@@ -207,21 +213,23 @@
             .then(res => res.json())
             .then(result => {
                 document.getElementById('loadingMessage').style.display = 'none';
+                alert("スプレッドシートに保存しました！"); // 保存完了を伝える
             })
             .catch(err => {
                 console.error("保存失敗:", err);
                 document.getElementById('loadingMessage').style.display = 'none';
+                alert("保存に失敗しました。詳細なエラーは開発者コンコルを確認してください。");
             });
         }
 
-        // ★スプレッドシートからデータを読み込んで復元する関数
+        // スプレッドシートからデータを読み込んで復元する関数
         function loadFromSpreadsheet() {
             if(GAS_URL.includes("ここにコピーした")) return;
 
+            document.getElementById('loadingMessage').innerText = "スプレッドシートからデータを取り込み中...";
             document.getElementById('loadingMessage').style.display = 'block';
-            document.getElementById('tableBody').innerHTML = ""; // いったん空にする
+            document.getElementById('tableBody').innerHTML = "";
 
-            // Google Apps ScriptからデータをGET取得
             fetch(GAS_URL)
             .then(res => res.json())
             .then(savedData => {
