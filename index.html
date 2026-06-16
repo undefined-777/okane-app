@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>お小遣い記録アプリ（星型・今日ハイライト・CSV強化版）</title>
+    <title>お小遣い記録アプリ（ロック機能付き）</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         
@@ -22,7 +22,7 @@
         
         th, td { border: 1px solid #ccc; padding: 10px; text-align: center; background-color: white; }
         
-        /* ★ボタンを「星型」にする魔法のCSS */
+        /* ボタンを「星型」にする魔法のCSS */
         .count-btn { 
             width: 45px; 
             height: 45px; 
@@ -30,31 +30,30 @@
             font-weight: bold;
             cursor: pointer; 
             border: none;
-            /* 四角いボタンを星型にくり抜く設定 */
             clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
             transition: background-color 0.2s, color 0.2s;
         }
 
-        /* ★0のときは白（文字は薄いグレーで見やすく） */
+        /* 0のときは白 */
         .count-btn.zero {
-            background-color: #f0f0f0; /* 少し立体感を出すために極薄いグレー */
+            background-color: #f0f0f0; 
             color: #999;
         }
 
-        /* ★1以上のときは黄色（文字は黒でハッキリ） */
+        /* 1以上のときは黄色 */
         .count-btn.active {
             background-color: #FFD600;
             color: #000;
         }
 
-        /* ★「今日」の列を赤くハイライトするスタイル */
+        /* 「今日」の列を赤くハイライト */
         .today-highlight {
-            background-color: #FFEBEE !important; /* 薄い赤背景 */
+            background-color: #FFEBEE !important; 
             border-left: 2px solid #EF5350 !important;
             border-right: 2px solid #EF5350 !important;
         }
         th.today-highlight {
-            background-color: #EF5350 !important; /* ヘッダーは濃い赤に白文字 */
+            background-color: #EF5350 !important; 
             color: white;
         }
 
@@ -136,15 +135,18 @@
         // ★ここに取得した長いGoogleウェブアプリのURLを貼り付けてください！
         const GAS_URL = "https://script.google.com/macros/s/AKfycbxtRfXMfsOGxgiJr3_ZVtG7-lfkJpWFEty8RfZpN_dmaNErikSSnf80Lw3lMVJ4BtUC/exec";
 
+        // ★ここに大人のパスワードを設定してください（例: "1234"）
+        const ADMIN_PASSWORD = "3153";
+
         let currentMonth = 0;
         let daysInMonth = 0;
-        let todayDay = 0; // 今日の「日」を記憶する変数
+        let todayDay = 0;
 
         window.onload = function() {
             const today = new Date();
             currentMonth = today.getMonth() + 1;
             daysInMonth = new Date(today.getFullYear(), currentMonth, 0).getDate(); 
-            todayDay = today.getDate(); // 今日が何日か取得
+            todayDay = today.getDate();
 
             document.getElementById('currentMonthTitle').innerText = currentMonth;
 
@@ -154,31 +156,24 @@
             for (let d = 1; d <= daysInMonth; d++) {
                 const th = document.createElement('th');
                 th.innerText = `${currentMonth}/${d}`;
-                
-                // ★もしループしている日付が「今日」なら、赤色のクラスをつける
                 if (d === todayDay) {
                     th.classList.add('today-highlight');
                 }
-                
                 headerRow.insertBefore(th, totalHeader);
             }
 
             loadFromSpreadsheet();
         };
 
-        // カウントアップされたときの処理
+        // 星ボタン（カウントアップ）は子供でも自由に押して楽しんでOK（保存時にブロックされます）
         function countUp(button) {
             let currentCount = parseInt(button.innerText);
             currentCount++;
             button.innerText = currentCount;
-            
-            // ★数字が変わったので、色（クラス）を塗り替える
             updateButtonColor(button);
-            
             updateRowTotal(button.closest('tr'));
         }
 
-        // ★星ボタンの色を数字によって「白」か「黄色」に切り替える関数
         function updateButtonColor(button) {
             const count = parseInt(button.innerText);
             if (count === 0) {
@@ -210,7 +205,8 @@
             let earnedWallet = 0;
             const rowTotals = document.querySelectorAll('.row-total');
             rowTotals.forEach(span => {
-                earnedWallet += parseInt(span.innerText);
+                totalWallet = parseInt(span.innerText); // 変数名のバグ予防
+                earnedWallet += totalWallet;
             });
             
             document.getElementById('earnedWallet').innerText = earnedWallet;
@@ -219,7 +215,14 @@
             document.getElementById('remainingWallet').innerText = remainingWallet;
         }
 
+        // ★【ロック機能】②もらったお小遣いの増減にはパスワードを求めます
         function changePaidWallet(amount) {
+            const inputPass = prompt("大人のパスワードを入力してください：");
+            if (inputPass !== ADMIN_PASSWORD) {
+                alert("パスワードが違います。変更できません。");
+                return;
+            }
+
             const paidSpan = document.getElementById('paidWallet');
             let currentPaid = parseInt(paidSpan.innerText);
             currentPaid += amount;
@@ -228,7 +231,14 @@
             calculateTotalWallet();
         }
 
+        // お手伝い項目の新規追加にも一応ロックをかけておきます
         function addNewRow() {
+            const inputPass = prompt("大人のパスワードを入力してください：");
+            if (inputPass !== ADMIN_PASSWORD) {
+                alert("パスワードが違います。項目を追加できません。");
+                return;
+            }
+
             const nameInput = document.getElementById('newItemName');
             const priceInput = document.getElementById('newItemPrice');
             const name = nameInput.value;
@@ -255,13 +265,8 @@
 
             for (let d = 1; d <= daysInMonth; d++) {
                 const countVal = savedCounts[d - 1] || 0;
-                
-                // ★「今日」のマス（td）には赤い背景用のクラスをつける
                 const todayClass = (d === todayDay) ? 'class="today-highlight"' : '';
-                
-                // 初期値が0なら星を「zero(白)」、1以上なら「active(黄色)」にする
                 const btnColorClass = (countVal === 0) ? 'zero' : 'active';
-                
                 rowHTML += `<td ${todayClass}><button class="count-btn ${btnColorClass}" onclick="countUp(this)">${countVal}</button></td>`;
             }
 
@@ -273,9 +278,19 @@
             updateRowTotal(newRow);
         }
 
+        // ★【ロック機能】スプレッドシートへの保存時にパスワードを求めます
         function saveToSpreadsheet() {
             if(GAS_URL.includes("ここにコピーした")) {
                 alert("GASのURLを設定してください！");
+                return;
+            }
+
+            // パスワードの入力ポップアップを表示
+            const inputPass = prompt("大人のパスワードを入力してください：");
+            
+            // パスワードが一致しない場合は処理を中断
+            if (inputPass !== ADMIN_PASSWORD) {
+                alert("パスワードが違います。スプレッドシートには保存されませんでした。");
                 return;
             }
 
@@ -342,37 +357,27 @@
             });
         }
 
-        // ★【強化版】日付ごとのカウントも含めて、完璧なカレンダー形式でCSV出力する
         function saveToCSV() {
             const table = document.getElementById('targetTable');
             let csvContent = [];
 
-            // 1. ヘッダー行（項目、一回、1日、2日...合計）を取得
             const headerCells = table.querySelectorAll('thead th');
             let headerRow = [];
             headerCells.forEach(cell => headerRow.push(cell.innerText));
             csvContent.push(headerRow.join(','));
 
-            // 2. データ行を1行ずつ取得して、日付ごとの数字もそのまま並べる
             const rows = table.querySelectorAll('tbody tr');
             rows.forEach(row => {
                 let rowData = [];
-                // 項目名と単価
                 rowData.push(row.querySelector('.fix-col-name').innerText);
                 rowData.push(row.querySelector('.fix-col-price').innerText.replace('円', ''));
-                
-                // ★ここですべての日付のボタンの「中の数字」を順番にCSVに詰め込みます
                 const buttons = row.querySelectorAll('.count-btn');
                 buttons.forEach(btn => rowData.push(btn.innerText));
-                
-                // 行の合計金額
                 const total = row.querySelector('.row-total').innerText;
                 rowData.push(total);
-                
                 csvContent.push(rowData.join(','));
             });
 
-            // 3. ファイルをダウンロードさせる処理
             const csvString = "\uFEFF" + csvContent.join('\n');
             const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
