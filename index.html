@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>お小遣い記録アプリ（ロック機能付き）</title>
+    <title>お小遣い記録アプリ（音が出る・ロック機能付き）</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         
@@ -142,6 +142,9 @@
         let daysInMonth = 0;
         let todayDay = 0;
 
+        // 音声を鳴らすための仕組み（Web Audio API）の準備
+        let audioCtx = null;
+
         window.onload = function() {
             const today = new Date();
             currentMonth = today.getMonth() + 1;
@@ -165,8 +168,45 @@
             loadFromSpreadsheet();
         };
 
-        // 星ボタン（カウントアップ）は子供でも自由に押して楽しんでOK（保存時にブロックされます）
+        // ★【新機能】ピコッと心地よい電子音を鳴らす関数
+        function playCoinSound() {
+            try {
+                // 初めてタップされたときにブラウザの音声機能を有効化する（セキュリティ対策）
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                // 音の波を作る装置（オシレーター）と音量を調節する装置を作成
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                // ファミコン風の「矩形波」に設定（"sine"にすると滑らかなピピッになります）
+                osc.type = "sine"; 
+                
+                // 音の高さの移り変わり（ピコッとなるように一瞬で音を高くする）
+                const now = audioCtx.currentTime;
+                osc.frequency.setValueAtTime(587.33, now); // 最初は「レ」の音 (D5)
+                osc.frequency.setValueAtTime(880.00, now + 0.06); // 0.06秒後に高い「ラ」の音 (A5)に跳ね上がる
+                
+                // 音量の調節（残響を残しながら一瞬で消えるようにする）
+                gain.gain.setValueAtTime(0.15, now); // 音量
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3); // 0.3秒かけてフェードアウト
+                
+                osc.start(now);
+                osc.stop(now + 0.3); // 0.3秒で音を完全に止める
+            } catch (e) {
+                console.error("音声再生エラー:", e);
+            }
+        }
+
+        // 星ボタン（カウントアップ）
         function countUp(button) {
+            // ★タップされたので音を鳴らす！
+            playCoinSound();
+
             let currentCount = parseInt(button.innerText);
             currentCount++;
             button.innerText = currentCount;
@@ -205,7 +245,7 @@
             let earnedWallet = 0;
             const rowTotals = document.querySelectorAll('.row-total');
             rowTotals.forEach(span => {
-                totalWallet = parseInt(span.innerText); // 変数名のバグ予防
+                let totalWallet = parseInt(span.innerText);
                 earnedWallet += totalWallet;
             });
             
@@ -215,7 +255,6 @@
             document.getElementById('remainingWallet').innerText = remainingWallet;
         }
 
-        // ★【ロック機能】②もらったお小遣いの増減にはパスワードを求めます
         function changePaidWallet(amount) {
             const inputPass = prompt("大人のパスワードを入力してください：");
             if (inputPass !== ADMIN_PASSWORD) {
@@ -231,7 +270,6 @@
             calculateTotalWallet();
         }
 
-        // お手伝い項目の新規追加にも一応ロックをかけておきます
         function addNewRow() {
             const inputPass = prompt("大人のパスワードを入力してください：");
             if (inputPass !== ADMIN_PASSWORD) {
@@ -278,17 +316,13 @@
             updateRowTotal(newRow);
         }
 
-        // ★【ロック機能】スプレッドシートへの保存時にパスワードを求めます
         function saveToSpreadsheet() {
             if(GAS_URL.includes("ここにコピーした")) {
                 alert("GASのURLを設定してください！");
                 return;
             }
 
-            // パスワードの入力ポップアップを表示
             const inputPass = prompt("大人のパスワードを入力してください：");
-            
-            // パスワードが一致しない場合は処理を中断
             if (inputPass !== ADMIN_PASSWORD) {
                 alert("パスワードが違います。スプレッドシートには保存されませんでした。");
                 return;
