@@ -2,87 +2,43 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>お小遣い記録アプリ（音が出る・ロック機能付き）</title>
+    <title>お小遣い記録アプリ（フルアップデート版）</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
-        
-        /* 表を囲む外枠 */
-        .table-container {
-            width: 100%;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            border: 1px solid #ccc;
-            margin-bottom: 20px;
-        }
-
-        table { 
-            border-collapse: collapse; 
-            min-width: 1500px; 
-        }
-        
+        .table-container { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #ccc; margin-bottom: 20px; }
+        table { border-collapse: collapse; min-width: 1500px; }
         th, td { border: 1px solid #ccc; padding: 10px; text-align: center; background-color: white; }
         
-        /* ボタンを「星型」にする魔法のCSS */
+        /* 星型ボタン */
         .count-btn { 
-            width: 45px; 
-            height: 45px; 
-            font-size: 14px; 
-            font-weight: bold;
-            cursor: pointer; 
-            border: none;
+            width: 45px; height: 45px; font-size: 14px; font-weight: bold; cursor: pointer; border: none;
             clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
             transition: background-color 0.2s, color 0.2s;
         }
+        .count-btn.zero { background-color: #f0f0f0; color: #999; }
+        .count-btn.active { background-color: #FFD600; color: #000; }
 
-        /* 0のときは白 */
-        .count-btn.zero {
-            background-color: #f0f0f0; 
-            color: #999;
-        }
+        /* 今日のハイライト */
+        .today-highlight { background-color: #FFEBEE !important; border-left: 2px solid #EF5350 !important; border-right: 2px solid #EF5350 !important; }
+        th.today-highlight { background-color: #EF5350 !important; color: white; }
 
-        /* 1以上のときは黄色 */
-        .count-btn.active {
-            background-color: #FFD600;
-            color: #000;
-        }
+        /* 合計行（フッター）のスタイル */
+        .total-row-footer td { background-color: #f5f5f5; font-weight: bold; font-size: 14px; border-top: 2px solid #999; }
 
-        /* 「今日」の列を赤くハイライト */
-        .today-highlight {
-            background-color: #FFEBEE !important; 
-            border-left: 2px solid #EF5350 !important;
-            border-right: 2px solid #EF5350 !important;
-        }
-        th.today-highlight {
-            background-color: #EF5350 !important; 
-            color: white;
-        }
-
-        /* 入力エリアと操作ボタン */
         .input-area { margin-bottom: 15px; }
         .input-area input { padding: 5px; font-size: 14px; margin-right: 5px; }
         .add-btn { padding: 6px 12px; font-size: 14px; cursor: pointer; }
         
-        /* お小遣い集計エリア */
-        .wallet-summary {
-            background-color: #f5f5f5;
-            padding: 15px;
-            border-radius: 6px;
-            margin-top: 20px;
-            max-width: 400px;
-            border: 1px solid #ddd;
-        }
+        .wallet-summary { background-color: #f5f5f5; padding: 15px; border-radius: 6px; margin-top: 20px; max-width: 400px; border: 1px solid #ddd; }
         .wallet-summary h3 { margin: 8px 0; font-size: 16px; color: #333; }
         .wallet-summary span { font-weight: bold; font-size: 18px; }
         .calc-btn { width: 35px; height: 30px; font-size: 16px; font-weight: bold; cursor: pointer; margin-left: 5px; vertical-align: middle; }
 
-        /* ボタンエリア */
         .action-btns { margin-top: 15px; display: flex; gap: 10px; }
         .cloud-save-btn { padding: 12px 24px; font-size: 16px; background-color: #0288D1; color: white; border: none; cursor: pointer; border-radius: 4px; font-weight: bold; }
         .csv-btn { padding: 12px 24px; font-size: 16px; background-color: #757575; color: white; border: none; cursor: pointer; border-radius: 4px; }
-        
         .loading-msg { color: #0288D1; font-weight: bold; margin-bottom: 10px; display: none; }
 
-        /* クラス名での列固定 */
         .fix-col-name { position: sticky; left: 0; z-index: 3; background-color: #f9f9f9; min-width: 80px; }
         .fix-col-price { position: sticky; left: 102px; z-index: 3; background-color: #f9f9f9; min-width: 50px; }
         .fix-col-total { position: sticky; right: 0; z-index: 3; background-color: #f9f9f9; border-left: 2px solid #ccc; min-width: 60px; }
@@ -99,7 +55,7 @@
         <button class="add-btn" onclick="addNewRow()">追加</button>
     </div>
 
-    <div id="loadingMessage" class="loading-msg">スプレッドシートと通信中...</div>
+    <div id="loadingMessage" class="loading-msg">設定ファイルを読み込み中...</div>
 
     <div class="table-container">
         <table id="targetTable">
@@ -112,11 +68,18 @@
             </thead>
             <tbody id="tableBody">
                 </tbody>
+            <tfoot>
+                <tr id="footerRow" class="total-row-footer">
+                    <td class="fix-col-name">合計</td>
+                    <td class="fix-col-price">-</td>
+                    <td class="fix-col-total"><span id="grandTotal">0</span>円</td>
+                </tr>
+            </tfoot>
         </table>
     </div>
 
     <div class="wallet-summary">
-        <h3>① 稼いだお小遣い: <span id="earnedWallet" style="color: #2E7D32;">0</span> 円</h3>
+        <h3>① これまでに稼いだお小遣い: <span id="earnedWallet" style="color: #2E7D32;">0</span> 円</h3>
         <h3>
             ② もらったお小遣い: <span id="paidWallet" style="color: #C62828;">0</span> 円
             <button class="calc-btn" onclick="changePaidWallet(-10)">-</button>
@@ -132,17 +95,13 @@
     </div>
 
     <script>
-        // ★ここに取得した長いGoogleウェブアプリのURLを貼り付けてください！
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbxtRfXMfsOGxgiJr3_ZVtG7-lfkJpWFEty8RfZpN_dmaNErikSSnf80Lw3lMVJ4BtUC/exec";
-
-        // ★ここに大人のパスワードを設定してください（例: "1234"）
-        const ADMIN_PASSWORD = "3153";
+        // 設定を保持する変数（conf.propertiesから取得）
+        let GAS_URL = "";
+        let ADMIN_PASSWORD = "";
 
         let currentMonth = 0;
         let daysInMonth = 0;
         let todayDay = 0;
-
-        // 音声を鳴らすための仕組み（Web Audio API）の準備
         let audioCtx = null;
 
         window.onload = function() {
@@ -153,75 +112,95 @@
 
             document.getElementById('currentMonthTitle').innerText = currentMonth;
 
+            // 1. ヘッダーとフッター（日ごと合計）の枠を生成
             const headerRow = document.getElementById('headerRow');
+            const footerRow = document.getElementById('footerRow');
             const totalHeader = headerRow.querySelector('.fix-col-total');
+            const grandTotalCell = footerRow.querySelector('.fix-col-total');
 
             for (let d = 1; d <= daysInMonth; d++) {
+                // ヘッダー作成
                 const th = document.createElement('th');
                 th.innerText = `${currentMonth}/${d}`;
-                if (d === todayDay) {
-                    th.classList.add('today-highlight');
-                }
+                if (d === todayDay) th.classList.add('today-highlight');
                 headerRow.insertBefore(th, totalHeader);
+
+                // フッター（日ごと合計用td）作成
+                const td = document.createElement('td');
+                td.id = `day-total-${d}`;
+                td.innerText = "0";
+                if (d === todayDay) td.classList.add('today-highlight');
+                footerRow.insertBefore(td, grandTotalCell);
             }
 
-            loadFromSpreadsheet();
+            // 2. プロパティファイルを読み込んでからGAS通信を開始
+            loadConfigAndInit();
         };
 
-        // ★【新機能】ピコッと心地よい電子音を鳴らす関数
-        function playCoinSound() {
-            try {
-                // 初めてタップされたときにブラウザの音声機能を有効化する（セキュリティ対策）
-                if (!audioCtx) {
-                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                
-                // 音の波を作る装置（オシレーター）と音量を調節する装置を作成
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                
-                // ファミコン風の「矩形波」に設定（"sine"にすると滑らかなピピッになります）
-                osc.type = "sine"; 
-                
-                // 音の高さの移り変わり（ピコッとなるように一瞬で音を高くする）
-                const now = audioCtx.currentTime;
-                osc.frequency.setValueAtTime(587.33, now); // 最初は「レ」の音 (D5)
-                osc.frequency.setValueAtTime(880.00, now + 0.06); // 0.06秒後に高い「ラ」の音 (A5)に跳ね上がる
-                
-                // 音量の調節（残響を残しながら一瞬で消えるようにする）
-                gain.gain.setValueAtTime(0.15, now); // 音量
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3); // 0.3秒かけてフェードアウト
-                
-                osc.start(now);
-                osc.stop(now + 0.3); // 0.3秒で音を完全に止める
-            } catch (e) {
-                console.error("音声再生エラー:", e);
-            }
+        // ★【新機能】conf.propertiesを読み込む関数
+        function loadConfigAndInit() {
+            document.getElementById('loadingMessage').style.display = 'block';
+            fetch('conf.properties')
+                .then(res => {
+                    if(!res.ok) throw new Error("conf.properties が見つかりません");
+                    return res.text();
+                })
+                .then(text => {
+                    // 行ごとに分解して解析
+                    const lines = text.split('\n');
+                    lines.forEach(line => {
+                        const trimmed = line.trim();
+                        if(trimmed.startsWith('#') || trimmed === "") return; // コメント行はスキップ
+                        const parts = trimmed.split('=');
+                        if(parts.length >= 2) {
+                            const key = parts[0].trim();
+                            const val = parts.slice(1).join('=').trim();
+                            if(key === "GAS_URL") GAS_URL = val;
+                            if(key === "ADMIN_PASSWORD") ADMIN_PASSWORD = val;
+                        }
+                    });
+                    
+                    // 読み込み終わったらGASからデータ取得
+                    loadFromSpreadsheet();
+                })
+                .catch(err => {
+                    alert("設定ファイルの読み込みに失敗しました。ファイル名や記述を確認してください。\n" + err.message);
+                    document.getElementById('loadingMessage').innerText = "設定エラー";
+                });
         }
 
-        // 星ボタン（カウントアップ）
-        function countUp(button) {
-            // ★タップされたので音を鳴らす！
-            playCoinSound();
+        function playCoinSound() {
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.type = "sine"; 
+                const now = audioCtx.currentTime;
+                osc.frequency.setValueAtTime(587.33, now);
+                osc.frequency.setValueAtTime(880.00, now + 0.06);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } catch (e) { console.error(e); }
+        }
 
+        function countUp(button) {
+            playCoinSound();
             let currentCount = parseInt(button.innerText);
             currentCount++;
             button.innerText = currentCount;
             updateButtonColor(button);
             updateRowTotal(button.closest('tr'));
+            calculateColumnTotals(); // ★カウントアップ時に縦の合計も再計算
         }
 
         function updateButtonColor(button) {
             const count = parseInt(button.innerText);
             if (count === 0) {
-                button.classList.remove('active');
-                button.classList.add('zero');
+                button.classList.remove('active'); button.classList.add('zero');
             } else {
-                button.classList.remove('zero');
-                button.classList.add('active');
+                button.classList.remove('zero'); button.classList.add('active');
             }
         }
 
@@ -231,37 +210,43 @@
             
             let totalCountInRow = 0;
             const buttons = row.querySelectorAll('.count-btn');
-            buttons.forEach(btn => {
-                totalCountInRow += parseInt(btn.innerText);
-            });
+            buttons.forEach(btn => totalCountInRow += parseInt(btn.innerText));
             
-            const rowTotal = price * totalCountInRow;
-            row.querySelector('.row-total').innerText = rowTotal;
-            
+            row.querySelector('.row-total').innerText = price * totalCountInRow;
             calculateTotalWallet();
+        }
+
+        // ★【新機能】縦（日ごと）の合計回数を集計してフッターに反映する
+        function calculateColumnTotals() {
+            const rows = document.querySelectorAll('#tableBody tr');
+            let grandTotal = 0;
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                let daySum = 0;
+                rows.forEach(row => {
+                    const price = parseInt(row.querySelector('.fix-col-price').innerText.replace('円', ''));
+                    const buttons = row.querySelectorAll('.count-btn');
+                    const count = parseInt(buttons[d - 1].innerText) || 0;
+                    daySum += (count * price); // 回数 × 単価 をその日の合計に足す
+                });
+                document.getElementById(`day-total-${d}`).innerText = daySum + "円";
+                grandTotal += daySum;
+            }
+            document.getElementById('grandTotal').innerText = grandTotal;
         }
 
         function calculateTotalWallet() {
             let earnedWallet = 0;
             const rowTotals = document.querySelectorAll('.row-total');
-            rowTotals.forEach(span => {
-                let totalWallet = parseInt(span.innerText);
-                earnedWallet += totalWallet;
-            });
+            rowTotals.forEach(span => earnedWallet += parseInt(span.innerText));
             
             document.getElementById('earnedWallet').innerText = earnedWallet;
             const paidWallet = parseInt(document.getElementById('paidWallet').innerText);
-            const remainingWallet = earnedWallet - paidWallet;
-            document.getElementById('remainingWallet').innerText = remainingWallet;
+            document.getElementById('remainingWallet').innerText = earnedWallet - paidWallet;
         }
 
+        // ★【仕様変更】ボタン操作時のパスワード要求をなくしました
         function changePaidWallet(amount) {
-            const inputPass = prompt("大人のパスワードを入力してください：");
-            if (inputPass !== ADMIN_PASSWORD) {
-                alert("パスワードが違います。変更できません。");
-                return;
-            }
-
             const paidSpan = document.getElementById('paidWallet');
             let currentPaid = parseInt(paidSpan.innerText);
             currentPaid += amount;
@@ -271,45 +256,28 @@
         }
 
         function addNewRow() {
-            const inputPass = prompt("大人のパスワードを入力してください：");
-            if (inputPass !== ADMIN_PASSWORD) {
-                alert("パスワードが違います。項目を追加できません。");
-                return;
-            }
-
             const nameInput = document.getElementById('newItemName');
             const priceInput = document.getElementById('newItemPrice');
-            const name = nameInput.value;
-            const price = priceInput.value;
+            const name = nameInput.value; const price = priceInput.value;
 
-            if (name === "" || price === "") {
-                alert("項目名と金額を入力してください！");
-                return;
-            }
-
+            if (name === "" || price === "") { alert("項目名と金額を入力してください！"); return; }
             createRowElement(name, price, []);
-            nameInput.value = "";
-            priceInput.value = "";
+            nameInput.value = ""; priceInput.value = "";
+            calculateColumnTotals();
         }
 
         function createRowElement(name, price, savedCounts) {
             const tbody = document.getElementById('tableBody');
             const newRow = document.createElement('tr');
 
-            let rowHTML = `
-                <td class="fix-col-name">${name}</td>
-                <td class="fix-col-price">${price}円</td>
-            `;
-
+            let rowHTML = `<td class="fix-col-name">${name}</td><td class="fix-col-price">${price}円</td>`;
             for (let d = 1; d <= daysInMonth; d++) {
                 const countVal = savedCounts[d - 1] || 0;
                 const todayClass = (d === todayDay) ? 'class="today-highlight"' : '';
                 const btnColorClass = (countVal === 0) ? 'zero' : 'active';
                 rowHTML += `<td ${todayClass}><button class="count-btn ${btnColorClass}" onclick="countUp(this)">${countVal}</button></td>`;
             }
-
             rowHTML += `<td class="fix-col-total"><span class="row-total">0</span>円</td>`;
-
             newRow.innerHTML = rowHTML;
             tbody.appendChild(newRow);
 
@@ -317,16 +285,11 @@
         }
 
         function saveToSpreadsheet() {
-            if(GAS_URL.includes("ここにコピーした")) {
-                alert("GASのURLを設定してください！");
-                return;
-            }
+            if(!GAS_URL || GAS_URL.includes("ここにコピー")) { alert("GASのURLが正しく設定されていません。"); return; }
 
+            // ★【仕様変更】保存時のみパスワードをチェック
             const inputPass = prompt("大人のパスワードを入力してください：");
-            if (inputPass !== ADMIN_PASSWORD) {
-                alert("パスワードが違います。スプレッドシートには保存されませんでした。");
-                return;
-            }
+            if (inputPass !== ADMIN_PASSWORD) { alert("パスワードが違います。"); return; }
 
             document.getElementById('loadingMessage').innerText = "スプレッドシートに保存中...";
             document.getElementById('loadingMessage').style.display = 'block';
@@ -350,27 +313,23 @@
                 paidWallet: parseInt(document.getElementById('paidWallet').innerText)
             };
 
-            fetch(GAS_URL, {
-                method: "POST",
-                body: JSON.stringify(payload)
-            })
+            fetch(GAS_URL, { method: "POST", body: JSON.stringify(payload) })
             .then(res => res.json())
             .then(result => {
                 document.getElementById('loadingMessage').style.display = 'none';
                 alert("スプレッドシートに保存しました！");
             })
             .catch(err => {
-                console.error("保存失敗:", err);
+                console.error(err);
                 document.getElementById('loadingMessage').style.display = 'none';
                 alert("保存に失敗しました。");
             });
         }
 
         function loadFromSpreadsheet() {
-            if(GAS_URL.includes("ここにコピーした")) return;
+            if(!GAS_URL || GAS_URL.includes("ここにコピー")) return;
 
-            document.getElementById('loadingMessage').innerText = "スプレッドシートからデータを取り込み中...";
-            document.getElementById('loadingMessage').style.display = 'block';
+            document.getElementById('loadingMessage').innerText = "データを取得中...";
             document.getElementById('tableBody').innerHTML = "";
 
             fetch(GAS_URL)
@@ -383,18 +342,18 @@
                 }
                 document.getElementById('paidWallet').innerText = savedData.paidWallet || 0;
                 calculateTotalWallet();
+                calculateColumnTotals(); // 縦の合計も初期集計
                 document.getElementById('loadingMessage').style.display = 'none';
             })
             .catch(err => {
-                console.error("読込失敗:", err);
-                document.getElementById('loadingMessage').style.display = 'none';
+                console.error(err);
+                document.getElementById('loadingMessage').innerText = "読込エラー";
             });
         }
 
         function saveToCSV() {
             const table = document.getElementById('targetTable');
             let csvContent = [];
-
             const headerCells = table.querySelectorAll('thead th');
             let headerRow = [];
             headerCells.forEach(cell => headerRow.push(cell.innerText));
@@ -407,8 +366,7 @@
                 rowData.push(row.querySelector('.fix-col-price').innerText.replace('円', ''));
                 const buttons = row.querySelectorAll('.count-btn');
                 buttons.forEach(btn => rowData.push(btn.innerText));
-                const total = row.querySelector('.row-total').innerText;
-                rowData.push(total);
+                rowData.push(row.querySelector('.row-total').innerText);
                 csvContent.push(rowData.join(','));
             });
 
@@ -419,9 +377,7 @@
             link.setAttribute("href", url);
             link.setAttribute("download", `okozukai_record_${currentMonth}gatsu.csv`);
             link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
     </script>
 </body>
